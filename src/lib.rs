@@ -9,6 +9,7 @@ pub mod discovery;
 pub mod elevation;
 pub mod install;
 pub mod models;
+pub mod orchestrator;
 pub mod paths;
 pub mod call;
 pub mod run;

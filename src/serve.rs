@@ -10,12 +10,14 @@ use rmcp::{tool, tool_handler, tool_router, ServerHandler, ServiceExt};
 use serde::Deserialize;
 use std::sync::Arc;
 
+use crate::orchestrator::{DispatchRequest, Orchestrator};
 use crate::paths::Paths;
 
 /// dmcp MCP server - exposes all dmcp operations as tools.
 #[derive(Clone)]
 pub struct DmcpServer {
     paths: Arc<Paths>,
+    orchestrator: Arc<Orchestrator>,
     tool_router: ToolRouter<Self>,
 }
 
@@ -56,11 +58,30 @@ struct CallToolParams {
     args: Option<serde_json::Value>,
 }
 
+#[derive(Deserialize, schemars::JsonSchema)]
+struct DispatchTasksParams {
+    tasks: Vec<crate::orchestrator::DispatchTask>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+struct GetTaskStatusParams {
+    #[serde(default)]
+    include_log: bool,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+struct KillTaskParams {
+    pid: u64,
+}
+
 #[tool_router]
 impl DmcpServer {
     pub fn new(paths: Paths) -> Self {
+        let paths = Arc::new(paths);
+        let orchestrator = Arc::new(Orchestrator::new(Arc::clone(&paths)));
         Self {
-            paths: Arc::new(paths),
+            paths,
+            orchestrator,
             tool_router: Self::tool_router(),
         }
     }
@@ -208,6 +229,54 @@ impl DmcpServer {
             Err(e) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
         }
     }
+
+    #[tool(description = "Dispatch multiple MCP tool calls concurrently. Returns PIDs for tracking. Use get_task_status to poll results, kill_task to abort.")]
+    async fn dispatch_tasks(
+        &self,
+        params: Parameters<DispatchTasksParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        let req = DispatchRequest {
+            tasks: params.0.tasks,
+        };
+        match self.orchestrator.dispatch_tasks(req).await {
+            Ok(pids) => {
+                let json = serde_json::to_string_pretty(&serde_json::json!({ "pids": pids }))
+                    .unwrap_or_default();
+                Ok(CallToolResult::success(vec![Content::text(json)]))
+            }
+            Err(e) => Ok(CallToolResult::error(vec![Content::text(e)])),
+        }
+    }
+
+    #[tool(description = "Get completed/failed tasks since last call. Set include_log=true for rolling 20-entry log window.")]
+    async fn get_task_status(
+        &self,
+        params: Parameters<GetTaskStatusParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        let include_log = params.0.include_log;
+        let status = self.orchestrator.get_task_status(include_log).await;
+        let json = serde_json::to_string_pretty(&status).unwrap_or_default();
+        Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    #[tool(description = "Kill a dispatched task by PID.")]
+    async fn kill_task(
+        &self,
+        params: Parameters<KillTaskParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        let pid = params.0.pid;
+        match self.orchestrator.kill_task(pid).await {
+            Ok(killed) => {
+                let msg = if killed {
+                    format!("Task {} killed", pid)
+                } else {
+                    format!("Task {} not found (already completed or invalid)", pid)
+                };
+                Ok(CallToolResult::success(vec![Content::text(msg)]))
+            }
+            Err(e) => Ok(CallToolResult::error(vec![Content::text(e)])),
+        }
+    }
 }
 
 #[tool_handler]
@@ -216,7 +285,9 @@ impl ServerHandler for DmcpServer {
         ServerInfo {
             instructions: Some(
                 "dmcp is an MCP server manager. Use these tools to list, install, uninstall, \
-                 configure, and run MCP servers. You can also list and call tools on installed servers."
+                 configure, and run MCP servers. You can also list and call tools on installed servers. \
+                 For concurrent multitasking: dispatch_tasks spawns multiple tool calls in parallel and returns PIDs; \
+                 get_task_status returns completed/failed results; kill_task aborts a task by PID."
                     .into(),
             ),
             capabilities: ServerCapabilities::builder().enable_tools().build(),
