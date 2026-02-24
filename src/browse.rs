@@ -79,9 +79,14 @@ fn fetch_registry(
         return Err(resp.error_for_status().unwrap_err());
     }
     let registry: serde_json::Value = resp.json()?;
-    let servers_array = match registry.get("servers").and_then(|s| s.as_array()) {
-        Some(a) => a,
-        None => return Ok(vec![]),
+    let servers_val = registry.get("servers");
+    let servers_array: Vec<serde_json::Value> = match servers_val {
+        Some(s) if s.is_array() => s.as_array().unwrap().clone(),
+        Some(s) if s.is_object() => {
+            let obj = s.as_object().unwrap();
+            obj.values().cloned().collect()
+        }
+        _ => return Ok(vec![]),
     };
 
     let mut result = Vec::new();

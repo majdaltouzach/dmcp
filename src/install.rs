@@ -55,10 +55,8 @@ pub fn install(
     }
 
     let manifest_path = install_dir.join("manifest.json");
-    let output = serde_json::to_string_pretty(&manifest).map_err(InstallError::Serialize)?;
-    std::fs::write(&manifest_path, output).map_err(InstallError::WriteManifest)?;
 
-    // Run setup script if present
+    // Run setup script if present (filename for local, URL for remote)
     if run_setup {
         if let Some(setup_script) = manifest.get("setupScript").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
             let config = manifest
@@ -70,14 +68,29 @@ pub fn install(
                         .collect()
                 })
                 .unwrap_or_default();
-            if let Err(e) = setup::run_setup(setup_script, &install_dir, &config) {
-                return Err(InstallError::SetupFailed(e.to_string()));
+            if let Ok(()) = setup::run_setup(setup_script, &install_dir, &config) {
+                manifest["setupScriptPath"] = serde_json::json!(install_dir.join(setup_script).to_string_lossy());
+                manifest["setupScriptRunAt"] = serde_json::Value::String(rfc3339_now());
+                manifest["setupScriptVersion"] = manifest.get("setupScriptVersion").cloned().unwrap_or(serde_json::json!("1.0.0"));
             }
+            // Install succeeds even if setup fails; user can retry via dmcp setup
         }
     }
 
-    // Update index
-    update_index_add(paths, id, &manifest_path, scope)?;
+    let output = serde_json::to_string_pretty(&manifest).map_err(InstallError::Serialize)?;
+    std::fs::write(&manifest_path, output).map_err(InstallError::WriteManifest)?;
+
+    // Update index with keywords
+    let keywords: Vec<String> = manifest
+        .get("keywords")
+        .and_then(|k| k.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+    update_index_add(paths, id, &manifest_path, scope, &keywords)?;
 
     Ok(())
 }
@@ -109,19 +122,48 @@ pub fn fetch_server_from_registry(paths: &Paths, id: &str) -> Result<serde_json:
             continue;
         }
         let registry: serde_json::Value = resp.json().map_err(InstallError::FetchFailed)?;
-        let servers = registry
-            .get("servers")
-            .and_then(|s| s.as_array())
-            .ok_or(InstallError::InvalidRegistry)?;
+        let servers_val = registry.get("servers").ok_or(InstallError::InvalidRegistry)?;
 
-        for server in servers {
-            if server.get("id").and_then(|i| i.as_str()) == Some(id) {
-                return Ok(server.clone());
+        let servers: Vec<serde_json::Value> = if let Some(arr) = servers_val.as_array() {
+            arr.clone()
+        } else if let Some(obj) = servers_val.as_object() {
+            obj.values().cloned().collect()
+        } else {
+            return Err(InstallError::InvalidRegistry);
+        };
+
+        for mut server in servers {
+            if server.get("id").and_then(|i| i.as_str()) != Some(id) {
+                continue;
             }
+
+            // If entry has manifest URL, fetch and merge (registry entry may override id, keywords, etc.)
+            if let Some(manifest_url) = server.get("manifest").and_then(|m| m.as_str()).filter(|s| s.starts_with("http")) {
+                let manifest_resp = client.get(manifest_url).send().map_err(InstallError::FetchFailed)?;
+                if manifest_resp.status().is_success() {
+                    let mut manifest: serde_json::Value = manifest_resp.json().map_err(InstallError::FetchFailed)?;
+                    // Merge: registry entry overrides manifest (for scope, keywords, etc.)
+                    merge_json(&mut manifest, &server);
+                    server = manifest;
+                }
+            }
+
+            return Ok(server);
         }
     }
 
     Err(InstallError::ServerNotFound)
+}
+
+/// Merge b into a. Keys in b override a. Used to merge registry metadata over fetched manifest.
+fn merge_json(a: &mut serde_json::Value, b: &serde_json::Value) {
+    if let (Some(a_obj), Some(b_obj)) = (a.as_object_mut(), b.as_object()) {
+        for (k, v) in b_obj {
+            if !v.is_null() {
+                a_obj.insert(k.clone(), v.clone());
+            }
+        }
+    }
 }
 
 fn install_stdio(server: &serde_json::Value, install_dir: &Path) -> Result<(), InstallError> {
@@ -180,6 +222,7 @@ pub fn update_index_add(
     id: &str,
     manifest_path: &Path,
     scope: crate::discovery::Scope,
+    keywords: &[String],
 ) -> Result<(), InstallError> {
     let index_path = match scope {
         crate::discovery::Scope::User => paths.user_install_dir().join("index.json"),
@@ -192,7 +235,10 @@ pub fn update_index_add(
     if index.get("servers").is_none() {
         index["servers"] = serde_json::json!({});
     }
-    index["servers"][id] = serde_json::json!({"location": manifest_path.to_string_lossy()});
+    index["servers"][id] = serde_json::json!({
+        "location": manifest_path.to_string_lossy(),
+        "keywords": keywords,
+    });
     index["updated"] = serde_json::Value::String(rfc3339_now());
 
     let output = serde_json::to_string_pretty(&index).map_err(InstallError::Serialize)?;
@@ -365,7 +411,7 @@ impl std::fmt::Display for UninstallError {
 
 impl std::error::Error for UninstallError {}
 
-fn rfc3339_now() -> String {
+pub fn rfc3339_now() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let d = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
     let secs = d.as_secs() as i64;

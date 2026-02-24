@@ -88,7 +88,12 @@ pub fn connect(
             }
         }
 
-        crate::install::update_index_add(paths, &id, &manifest_path, scope)
+        let keywords: Vec<String> = manifest
+            .get("keywords")
+            .and_then(|k| k.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+        crate::install::update_index_add(paths, &id, &manifest_path, scope, &keywords)
             .map_err(|e| ConnectError::IndexError(e.to_string()))?;
 
         return Ok(id);
@@ -181,7 +186,7 @@ fn connect_raw(
     let output = serde_json::to_string_pretty(&manifest).map_err(ConnectError::Serialize)?;
     std::fs::write(&manifest_path, output).map_err(ConnectError::WriteManifest)?;
 
-    crate::install::update_index_add(paths, &id, &manifest_path, scope)
+    crate::install::update_index_add(paths, &id, &manifest_path, scope, &[])
         .map_err(|e| ConnectError::IndexError(e.to_string()))?;
 
     Ok(id)

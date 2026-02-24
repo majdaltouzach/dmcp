@@ -64,6 +64,13 @@ The LLM does not need separate documentation. It learns from the tool metadata a
 | `set_config` | Set a config value for a server |
 | `list_server_tools` | List tools available on an MCP server |
 | `call_server_tool` | Call a tool on an MCP server |
+| `dispatch_tasks` | Dispatch multiple MCP tool calls concurrently; returns PIDs for tracking |
+| `get_task_status` | Get completed/failed tasks since last call; optional rolling log |
+| `kill_task` | Kill a dispatched task by PID |
+
+### Multitasking (dispatch_tasks, get_task_status, kill_task)
+
+For concurrent execution: use `dispatch_tasks` with `{ "tasks": [ { "server": "id", "tool": "name", "params": {} }, ... ] }` to spawn tasks in parallel. Poll `get_task_status` for results; use `kill_task` with a PID to abort a running task.
 
 ## Example Flow
 

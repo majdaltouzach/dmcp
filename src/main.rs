@@ -519,6 +519,21 @@ fn main() {
                                         eprintln!("Error: {}", e);
                                         std::process::exit(1);
                                     }
+                                    // Update manifest with setup run timestamp
+                                    if let Some(manifest_path) = discovery::get_manifest_path(&paths, &id) {
+                                        if let Ok(content) = std::fs::read_to_string(&manifest_path) {
+                                            if let Ok(mut m) = serde_json::from_str::<serde_json::Value>(&content) {
+                                                m["setupScriptPath"] = serde_json::json!(dir.join(script).to_string_lossy());
+                                                m["setupScriptRunAt"] = serde_json::Value::String(dmcp::install::rfc3339_now());
+                                                m["setupScriptVersion"] = manifest
+                                                    .setup_script_version
+                                                    .as_ref()
+                                                    .map(|s| serde_json::Value::String(s.clone()))
+                                                    .unwrap_or(serde_json::json!("1.0.0"));
+                                                let _ = std::fs::write(&manifest_path, serde_json::to_string_pretty(&m).unwrap_or_default());
+                                            }
+                                        }
+                                    }
                                     println!("Setup complete for {}", id);
                                 }
                                 None => {

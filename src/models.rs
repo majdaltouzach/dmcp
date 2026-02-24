@@ -10,7 +10,11 @@ pub struct Index {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexEntry {
+    /// Path to manifest.json. Alias "manifest" for guide compatibility.
+    #[serde(alias = "manifest")]
     pub location: String,
+    #[serde(default)]
+    pub keywords: Vec<String>,
 }
 
 /// Manifest file at `<install_dir>/manifest.json`
@@ -39,9 +43,26 @@ pub struct Manifest {
     pub permissions: Vec<String>,
     #[serde(default)]
     pub tools: Vec<serde_json::Value>,
-    /// Path (relative to install dir) or URL to setup script. Run at install to prepare environment.
+    /// Filename (local) or URL (remote). Run at install to prepare environment.
     #[serde(default)]
     pub setup_script: Option<String>,
+    /// Local path after install (written by dmcp).
+    #[serde(default)]
+    pub setup_script_path: Option<String>,
+    /// Timestamp of last setup run.
+    #[serde(default)]
+    pub setup_script_run_at: Option<String>,
+    /// Version of setup script.
+    #[serde(default)]
+    pub setup_script_version: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    #[serde(default)]
+    pub scope: Option<String>,
+    #[serde(default)]
+    pub source: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

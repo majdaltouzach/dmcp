@@ -102,27 +102,31 @@ Each object in the `servers` array describes one MCP server.
 | `screenshots`        | array  | Screenshot URLs or `{"thumbnail": ..., "url": ...}` objects.   |
 | `changelog`          | string | Changelog text.                                                 |
 | `scope`              | string | `"user"` (default) or `"system"`. See Scope below.              |
-| `setupScript`        | string | URL to a bash script run after install to set up dependencies (local servers only). See Setup Script below. |
+| `setupScript`        | string | For local servers: filename of a bash script inside the server folder (e.g. `"setup.sh"`). For remote servers: URL to download the script. See Setup Script below. |
 
 ### Setup Script
 
-For **local servers** (stdio), you can provide an optional `setupScript` URL. This script is run after the Git clone to install dependencies (e.g. `pip install -r requirements.txt`, `npm install`).
+The setup script runs in the server’s **install directory** (where `manifest.json` lives), so the script can read the user’s config from the manifest and set up the environment.
 
-- **User opt-in**: Users must explicitly enable "Run setup script" during install (checkbox off by default).
-- **Re-run**: Installed servers can run the setup script from the Configure dialog (e.g. "Repair" or after upgrading dependencies).
+**Local servers (stdio):** The script **must be inside the folder that the MCP project is in** (i.e. inside `source.path`). When Discover clones the repo, it copies the server folder contents to the install directory—the setup script is included. Specify the filename in `setupScript` (e.g. `"setup.sh"`). Use it to install dependencies (e.g. `pip install -r requirements.txt`, `npm install`, `cargo build --release`) and optionally apply config from `manifest.json`.
+**Remote servers (SSE/WebSocket):** There is no clone; the install directory only contains `manifest.json`. Provide a URL in `setupScript`; Discover downloads the script. The script runs locally, reads the manifest, and prepares the connection. 
+- **Install flow**: Clone/download first, then run setup automatically. If the setup script fails, the install still succeeds; the main action button becomes "Run Setup" so the user can retry.
+- **Re-run**: If setup failed or was skipped, the main action button shows "Run Setup" instead of "Copy ID".
 - **Execution**: The script runs with `bash` in the install directory. For system scope, it runs with elevated privileges.
-- **Storage**: The URL and last run timestamp (`setupScriptRunAt`) are stored in the manifest for installed servers.
+- **Storage**: The manifest stores `setupScript` (filename or URL), `setupScriptPath` (local path), `setupScriptVersion`, and `setupScriptRunAt` (last run timestamp).
 
-Example:
+Example (local server):
 
 ```json
 {
   "id": "com.example.mcp.my-server",
-  "setupScript": "https://raw.githubusercontent.com/example/mcp-registry/main/scripts/setup.sh",
+  "setupScript": "setup.sh",
   "source": { "type": "git", "url": "...", "path": "servers/my-server" },
   "transports": [{ "type": "stdio", "command": "python3", "args": ["server.py"] }]
 }
 ```
+
+Your repo layout: `servers/my-server/setup.sh` must exist alongside `server.py`, `pyproject.toml`, etc.
 
 ### Icons
 
@@ -393,7 +397,7 @@ When a user clicks Install on your server:
 4. For **local servers** (stdio): `git clone` fetches the repo, then the project root (`source.path` or repo root) is extracted into the install dir. The transport's `command` + `args` run from that directory.
 5. For **remote servers** (SSE/WebSocket): The endpoint is validated via HTTP HEAD, then the manifest is written. No local clone.
 6. A manifest is written to `<installDir>/manifest.json` with full metadata and config. MCP servers read their configuration from this file.
-7. The index at `<base>/mcp/installed/index.json` is updated with `{ "<id>": { "location": "<path>/manifest.json", "keywords": ["..."] } }`. The index stores pointers plus keywords for search; full metadata lives in each manifest.
+7. The index at `<base>/mcp/installed/index.json` is updated with `{ "<id>": { "manifest": "<path>/manifest.json", "keywords": ["..."] } }`. The index stores pointers plus keywords for search; full metadata lives in each manifest.
 8. For user-scope, `<base>` is `~/.local/share`. For system-scope, `<base>` is `/usr/share`.
 
 ### Directory Layout After Install
@@ -402,7 +406,7 @@ When a user clicks Install on your server:
 
 ```
 ~/.local/share/mcp/installed/
-├── index.json                                 (id -> location + keywords)
+├── index.json                                 (id -> manifest + keywords)
 ├── com.example.calculator/                     (local server — Git clone)
 │   ├── manifest.json                           (full metadata + config; MCP servers read this)
 │   ├── server.py                               (project root contents)
@@ -416,6 +420,11 @@ When a user clicks Install on your server:
 ### Uninstall
 
 Removal is a simple `rm -rf <installDir>`. All files are self-contained. For system-scope, `pkexec rm -rf` is used.
+
+### Troubleshooting: No Servers or Install Fails
+
+- **Wrong branch in registry URL**: Many GitHub repos use `main` as the default branch. If your registry URL uses `master` and your repo uses `main`, the fetch will 404. Update `~/.config/mcp/sources.list` to use the correct branch, e.g. `https://raw.githubusercontent.com/yourorg/mcp-registry/main/registry.json`.
+- **Registry JSON format**: Ensure your `registry.json` has `version`, `updated`, and a `servers` array. Each server needs `id`, `name`, `summary`, `version`, `transports`, and (for local servers) `source` with `type`, `url`, and `path`.
 
 ## Tips
 

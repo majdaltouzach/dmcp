@@ -1,0 +1,51 @@
+{
+    "author": "",
+    "capabilities": [
+    ],
+    "categories": [
+        "mcp",
+        "mcp-development"
+    ],
+    "description": "",
+    "homepage": "https://github.com/YakupAtahanov/mcp-registry",
+    "icon": "https://raw.githubusercontent.com/YakupAtahanov/mcp-registry/main/logo/Logo.png",
+    "id": "com.github.yakupatahanov.mcp.calculator-py",
+    "installDir": "/home/yakup/.local/share/mcp/installed/com.github.yakupatahanov.mcp.calculator-py",
+    "keywords": [
+        "calculator",
+        "math",
+        "arithmetic",
+        "python"
+    ],
+    "name": "Calculator (Python)",
+    "permissions": [
+    ],
+    "scope": "user",
+    "setupScript": "setup.sh",
+    "setupScriptPath": "/home/yakup/.local/share/mcp/installed/com.github.yakupatahanov.mcp.calculator-py/setup.sh",
+    "setupScriptVersion": "1.0.0",
+    "source": {
+        "path": "servers/calculator-py",
+        "type": "git",
+        "url": "https://github.com/YakupAtahanov/mcp-registry.git"
+    },
+    "summary": "Simple arithmetic calculator MCP server written in Python",
+    "tools": [
+        "add",
+        "subtract",
+        "multiply",
+        "divide"
+    ],
+    "transports": [
+        {
+            "args": [
+                "src/mcp_calculator/server.py"
+            ],
+            "command": ".venv/bin/python3",
+            "description": "Main interface",
+            "type": "stdio"
+        }
+    ],
+    "type": "stdio",
+    "version": "1.0.0"
+}

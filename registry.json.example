@@ -1,0 +1,15 @@
+{
+    "servers": {
+        "com.github.yakupatahanov.mcp.calculator-py": {
+            "keywords": [
+                "calculator",
+                "math",
+                "arithmetic",
+                "python"
+            ],
+            "manifest": "/home/yakup/.local/share/mcp/installed/com.github.yakupatahanov.mcp.calculator-py/manifest.json"
+        }
+    },
+    "updated": "2026-02-23T20:20:53",
+    "version": "1.0"
+}

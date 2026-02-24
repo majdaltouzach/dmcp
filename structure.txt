@@ -1,0 +1,68 @@
+manifest.json  pyproject.toml  README.md  setup.sh  src
+[yakup@cachyos-base com.github.yakupatahanov.mcp.calculator-py]$ cat manifest.json 
+{
+    "author": "",
+    "capabilities": [
+    ],
+    "categories": [
+        "mcp"
+    ],
+    "description": "",
+    "homepage": "",
+    "icon": "https://raw.githubusercontent.com/YakupAtahanov/mcp-registry/main/logo/Logo.png",
+    "id": "com.github.yakupatahanov.mcp.calculator-py",
+    "installDir": "/home/yakup/.local/share/mcp/installed/com.github.yakupatahanov.mcp.calculator-py",
+    "keywords": [
+        "calculator",
+        "math",
+        "arithmetic",
+        "python"
+    ],
+    "name": "Calculator (Python)",
+    "permissions": [
+    ],
+    "scope": "user",
+    "setupScript": "https://raw.githubusercontent.com/YakupAtahanov/mcp-registry/main/scripts/setup-calculator-py.sh",
+    "setupScriptPath": "/home/yakup/.local/share/mcp/installed/com.github.yakupatahanov.mcp.calculator-py/setup-calculator-py.sh",
+    "setupScriptRunAt": "2026-02-23T17:00:17",
+    "setupScriptVersion": "1.0.0",
+    "source": {
+        "path": "servers/calculator-py",
+        "type": "git",
+        "url": "https://github.com/YakupAtahanov/mcp-registry.git"
+    },
+    "summary": "Simple arithmetic calculator MCP server written in Python",
+    "tools": [
+    ],
+    "transports": [
+        {
+            "args": [
+                "src/mcp_calculator/server.py"
+            ],
+            "command": ".venv/bin/python3",
+            "description": "Main interface",
+            "type": "stdio"
+        }
+    ],
+    "type": "stdio",
+    "version": "1.0.0"
+}
+[yakup@cachyos-base com.github.yakupatahanov.mcp.calculator-py]$ cd ..
+[yakup@cachyos-base installed]$ ls
+com.github.yakupatahanov.mcp.calculator-py  index.json
+[yakup@cachyos-base installed]$ cat index.json 
+{
+    "servers": {
+        "com.github.yakupatahanov.mcp.calculator-py": {
+            "keywords": [
+                "calculator",
+                "math",
+                "arithmetic",
+                "python"
+            ],
+            "location": "/home/yakup/.local/share/mcp/installed/com.github.yakupatahanov.mcp.calculator-py/manifest.json"
+        }
+    },
+    "updated": "2026-02-23T19:55:18",
+    "version": "1.0"
+}
