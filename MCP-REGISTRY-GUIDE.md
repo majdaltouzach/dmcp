@@ -22,6 +22,18 @@ Registry sources are read from (in priority order):
 - `~/.config/mcp/sources.list` (user)
 - `/etc/mcp/sources.list` (system)
 
+### Automatic vs Manual Setup
+
+Discover creates most files automatically; only the system sources list needs manual setup:
+
+| File or directory | Created by | Notes |
+|-------------------|------------|-------|
+| `~/.config/mcp/sources.list` | Discover | Auto-created on first run from the installed default, or a fallback if none exists. Users can add registry URLs here. |
+| `~/.local/share/mcp/installed/index.json` | Discover | Created when the first server is installed. Updated on each install/remove. |
+| `~/.local/share/mcp/installed/<id>/manifest.json` | Discover | Written per server on install; updated when the user saves configuration. |
+| `~/.cache/discover/mcp-registries/` | Discover | Cache for fetched registries. Created when registries are first fetched. |
+| `/etc/mcp/sources.list` | Admin/distro | **Manual setup.** System-wide registry sources. Create this file if you want all users on the machine to see the same registries by default. |
+
 ## Registry File Format
 
 A registry is a single JSON file with this structure:
@@ -79,7 +91,7 @@ Each object in the `servers` array describes one MCP server.
 | `bugUrl`             | string | URL to the issue tracker.                                       |
 | `donationUrl`        | string | URL for donations.                                              |
 | `icon`               | string | Icon for display: Freedesktop icon name or URL to an image (see Icons below). |
-| `categories`         | array  | Category strings for filtering (see Categories below).          |
+| `keywords`           | array  | Search keywords (e.g. `["calculator", "math"]`) for easier discovery. |
 | `capabilities`       | array  | What the server can do (freeform strings for display).          |
 | `permissions`        | array  | Permissions the server requires (freeform strings for display). |
 | `tools`              | array  | Tools provided (strings or `{"name": ..., "description": ...}`).|
@@ -90,6 +102,27 @@ Each object in the `servers` array describes one MCP server.
 | `screenshots`        | array  | Screenshot URLs or `{"thumbnail": ..., "url": ...}` objects.   |
 | `changelog`          | string | Changelog text.                                                 |
 | `scope`              | string | `"user"` (default) or `"system"`. See Scope below.              |
+| `setupScript`        | string | URL to a bash script run after install to set up dependencies (local servers only). See Setup Script below. |
+
+### Setup Script
+
+For **local servers** (stdio), you can provide an optional `setupScript` URL. This script is run after the Git clone to install dependencies (e.g. `pip install -r requirements.txt`, `npm install`).
+
+- **User opt-in**: Users must explicitly enable "Run setup script" during install (checkbox off by default).
+- **Re-run**: Installed servers can run the setup script from the Configure dialog (e.g. "Repair" or after upgrading dependencies).
+- **Execution**: The script runs with `bash` in the install directory. For system scope, it runs with elevated privileges.
+- **Storage**: The URL and last run timestamp (`setupScriptRunAt`) are stored in the manifest for installed servers.
+
+Example:
+
+```json
+{
+  "id": "com.example.mcp.my-server",
+  "setupScript": "https://raw.githubusercontent.com/example/mcp-registry/main/scripts/setup.sh",
+  "source": { "type": "git", "url": "...", "path": "servers/my-server" },
+  "transports": [{ "type": "stdio", "command": "python3", "args": ["server.py"] }]
+}
+```
 
 ### Icons
 
@@ -254,25 +287,8 @@ Discover shows a configuration dialog before installation if any required proper
 
 User-provided values are stored in the per-server manifest at `<installDir>/manifest.json` in the `config` object. MCP servers read their configuration from this manifest file. Optional property defaults are applied automatically if the user doesn't override them.
 
-## Categories
+All MCP servers appear under **Development > MCP Servers** in Discover. Use `keywords` for searchability.
 
-Use these category strings so your servers appear under the right filter in Discover:
-
-| Category              | Description              |
-|-----------------------|--------------------------|
-| `mcp`                 | Generic MCP server (always include this) |
-| `mcp-database`        | Database servers         |
-| `mcp-filesystem`      | Filesystem operations    |
-| `mcp-web`             | Web-related servers      |
-| `mcp-search`          | Search capabilities      |
-| `mcp-development`     | Development tools        |
-| `mcp-ai`              | AI-related services      |
-| `mcp-shell`           | Shell execution          |
-| `mcp-communication`   | Communication tools      |
-| `mcp-media`           | Media handling           |
-| `mcp-productivity`    | Productivity tools       |
-
-Always include `"mcp"` in addition to any specific category. A server can belong to multiple categories.
 
 ## Hosting Your Registry
 
@@ -331,7 +347,7 @@ Here is a complete minimal registry with one local server (Git) and one remote S
         "url": "https://github.com/yourorg/mcp-registry.git",
         "path": "servers/calculator-py"
       },
-      "categories": ["mcp", "mcp-development"]
+      "keywords": ["calculator", "math"]
     },
     {
       "id": "com.yourorg.mcp.cloud-api",
@@ -344,7 +360,7 @@ Here is a complete minimal registry with one local server (Git) and one remote S
           "url": "https://api.yourorg.com/mcp/sse"
         }
       ],
-      "categories": ["mcp", "mcp-web"],
+      "keywords": ["cloud", "api", "sse"],
       "configurableProperties": [
         {
           "key": "api_key",
@@ -365,7 +381,7 @@ Here is a complete minimal registry with one local server (Git) and one remote S
 2. **Cache**: The response is cached locally at `~/.cache/discover/mcp-registries/`.
 3. **Parse**: Each server entry in the `servers` array becomes a resource in the MCP Servers catalogue.
 4. **Merge**: If a server from the registry is already installed (matched by `id`), Discover compares versions and marks it as upgradeable if the registry version is newer.
-5. **Display**: Servers appear under Development > MCP Servers, filterable by category and searchable by name/summary/id.
+5. **Display**: Servers appear under Development > MCP Servers, searchable by name, summary, id, and keywords.
 
 ## What Happens on Install
 
@@ -377,7 +393,7 @@ When a user clicks Install on your server:
 4. For **local servers** (stdio): `git clone` fetches the repo, then the project root (`source.path` or repo root) is extracted into the install dir. The transport's `command` + `args` run from that directory.
 5. For **remote servers** (SSE/WebSocket): The endpoint is validated via HTTP HEAD, then the manifest is written. No local clone.
 6. A manifest is written to `<installDir>/manifest.json` with full metadata and config. MCP servers read their configuration from this file.
-7. The index at `<base>/mcp/installed/index.json` is updated with `{ "<id>": { "location": "<path>/manifest.json" } }`. The index only stores pointers; full metadata lives in each manifest.
+7. The index at `<base>/mcp/installed/index.json` is updated with `{ "<id>": { "location": "<path>/manifest.json", "keywords": ["..."] } }`. The index stores pointers plus keywords for search; full metadata lives in each manifest.
 8. For user-scope, `<base>` is `~/.local/share`. For system-scope, `<base>` is `/usr/share`.
 
 ### Directory Layout After Install
@@ -386,7 +402,7 @@ When a user clicks Install on your server:
 
 ```
 ~/.local/share/mcp/installed/
-├── index.json                                 (id -> manifest location only)
+├── index.json                                 (id -> location + keywords)
 ├── com.example.calculator/                     (local server — Git clone)
 │   ├── manifest.json                           (full metadata + config; MCP servers read this)
 │   ├── server.py                               (project root contents)

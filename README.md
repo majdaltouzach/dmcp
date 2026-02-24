@@ -18,7 +18,8 @@ It supports both **local** (stdio) and **remote** (SSE, WebSocket) servers. Loca
 - **Install** — Install from registry (Git clone for stdio, metadata for remote)
 - **Connect** — Add remote servers by URL (fetches manifest if valid JSON, else treats as raw endpoint)
 - **Config** — Get and set per-server configuration (API keys, endpoints, etc.)
-- **Invocation** — Spawn stdio servers (planned)
+- **Invocation** — Spawn stdio servers; SSE/WebSocket: print connection URL
+- **Setup** — Run setup scripts at install (dependencies, config) or via `dmcp setup <id>`
 
 ## Configuration
 
@@ -51,9 +52,11 @@ cargo install --path .   # Install to ~/.cargo/bin
 | `dmcp sources add <url> [--system]` | Add a registry source (default: user) |
 | `dmcp sources remove <url> [--system]` | Remove a registry source |
 | `dmcp browse [url] [--user] [--system] [--json]` | Browse servers in registries (or from specific URL) |
-| `dmcp install <id> [--system]` | Install from registry (respects registry scope) |
+| `dmcp install <id> [--system] [--no-setup]` | Install from registry (runs setup script by default) |
 | `dmcp uninstall <id>` | Remove installed server |
-| `dmcp connect <url> [--id] [--name] [--summary] [--version] [-c key=value...] [--system]` | Connect to remote server (manifest URL or raw endpoint) |
+| `dmcp run <id> [--verbose]` | Run server (stdio: spawn; SSE/WebSocket: print URL) |
+| `dmcp setup <id>` | Run setup script for an installed server |
+| `dmcp connect <url> [--id] [--name] [--summary] [--version] [-c key=value...] [--system] [--no-setup]` | Connect to remote server |
 | `dmcp paths` | Show resolved paths (debug) |
 
 ## Project Structure
@@ -67,6 +70,8 @@ src/
 ├── sources.rs   # Registry sources (sources.list)
 ├── config.rs    # Config get/set
 ├── install.rs   # Install, uninstall
+├── run.rs       # Run servers (stdio spawn, SSE/WS URL)
+├── setup.rs     # Setup script execution
 
 ├── browse.rs    # Browse registry servers
 ├── connect.rs   # Connect to remote by URL (manifest or raw)
@@ -83,7 +88,7 @@ src/
 
 ## Status
 
-Core features implemented: list, info, config, sources, browse, install, uninstall, connect. `dmcp run` planned.
+Core features implemented: list, info, config, sources, browse, install, uninstall, connect, run, setup.
 
 ## References
 

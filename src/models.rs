@@ -39,6 +39,9 @@ pub struct Manifest {
     pub permissions: Vec<String>,
     #[serde(default)]
     pub tools: Vec<serde_json::Value>,
+    /// Path (relative to install dir) or URL to setup script. Run at install to prepare environment.
+    #[serde(default)]
+    pub setup_script: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

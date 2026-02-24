@@ -4,17 +4,20 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::discovery;
+use crate::setup;
 use crate::elevation::is_elevated;
 use crate::paths::Paths;
 use crate::sources::list_sources;
 
 /// Install a server from registry by id.
 /// When server_override is Some, uses it instead of fetching (avoids double fetch when main already fetched for scope resolution).
+/// When run_setup is true and the server has a setupScript, runs it after writing the manifest.
 pub fn install(
     paths: &Paths,
     id: &str,
     scope: crate::discovery::Scope,
     server_override: Option<serde_json::Value>,
+    run_setup: bool,
 ) -> Result<(), InstallError> {
     let server = match server_override {
         Some(s) => s,
@@ -54,6 +57,24 @@ pub fn install(
     let manifest_path = install_dir.join("manifest.json");
     let output = serde_json::to_string_pretty(&manifest).map_err(InstallError::Serialize)?;
     std::fs::write(&manifest_path, output).map_err(InstallError::WriteManifest)?;
+
+    // Run setup script if present
+    if run_setup {
+        if let Some(setup_script) = manifest.get("setupScript").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            let config = manifest
+                .get("config")
+                .and_then(|c| c.as_object())
+                .map(|obj| {
+                    obj.iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if let Err(e) = setup::run_setup(setup_script, &install_dir, &config) {
+                return Err(InstallError::SetupFailed(e.to_string()));
+            }
+        }
+    }
 
     // Update index
     update_index_add(paths, id, &manifest_path, scope)?;
@@ -215,6 +236,7 @@ pub enum InstallError {
     CopyFailed(std::io::Error),
     Serialize(serde_json::Error),
     WriteManifest(std::io::Error),
+    SetupFailed(String),
     ParseIndex(serde_json::Error),
     WriteIndex(std::io::Error),
 }
@@ -233,6 +255,7 @@ impl std::fmt::Display for InstallError {
             InstallError::CopyFailed(e) => write!(f, "Failed to copy files: {}", e),
             InstallError::Serialize(e) => write!(f, "Failed to serialize: {}", e),
             InstallError::WriteManifest(e) => write!(f, "Failed to write manifest: {}", e),
+            InstallError::SetupFailed(s) => write!(f, "Setup failed: {}", s),
             InstallError::ParseIndex(e) => write!(f, "Failed to parse index: {}", e),
             InstallError::WriteIndex(e) => write!(f, "Failed to write index: {}", e),
         }

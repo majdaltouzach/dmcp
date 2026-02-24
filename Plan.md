@@ -12,11 +12,12 @@
 
 | Feature | Description | Status |
 |---------|-------------|--------|
-| **`dmcp run <id>`** | Spawn stdio servers. (Deferred — has nuances) | Pending |
+| **`dmcp run <id>`** | Spawn stdio servers (config as env); SSE/WebSocket: print URL | Done |
 | **`dmcp browse [url]`** | Fetch registries, list available servers (or specific URL) | Done |
 | **`dmcp install <id>`** | Install from registry (clone for stdio, metadata for remote) | Done |
 | **`dmcp uninstall <id>`** | Remove installed server | Done |
 | **`dmcp connect <url>`** | Add remote server: fetch manifest from URL if valid JSON, else treat as raw endpoint | Done |
+| **`dmcp setup <id>`** | Run setup script (dependencies, config) for installed server | Done |
 
 ## Lower Priority
 
@@ -30,4 +31,4 @@
 
 ## Current Focus
 
-**`dmcp run <id>`** — Next up.
+**`dmcp get-connection-info <id>`** or **`dmcp validate <id>`** — Next up.

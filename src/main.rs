@@ -3,7 +3,7 @@
 use clap::{Parser, Subcommand};
 use dmcp::config;
 use dmcp::elevation::{is_elevated, is_system_scope, re_exec_with_pkexec};
-use dmcp::{add_source, connect, discovery, fetch_server_from_registry, get_server, install, list_registry_servers, list_registry_servers_from_url, list_servers, list_sources, remove_source, scope_from_registry_server, set_config_value, uninstall, Paths};
+use dmcp::{add_source, connect, discovery, fetch_server_from_registry, get_server, install, list_registry_servers, list_registry_servers_from_url, list_servers, list_sources, remove_source, run, run_setup, scope_from_registry_server, set_config_value, uninstall, Paths};
 
 #[derive(Parser)]
 #[command(name = "dmcp")]
@@ -67,12 +67,26 @@ enum Commands {
         /// Install to system scope (requires elevation)
         #[arg(long)]
         system: bool,
+
+        /// Skip running the setup script (if defined)
+        #[arg(long)]
+        no_setup: bool,
     },
 
     /// Uninstall an MCP server
     Uninstall {
         /// Server ID to uninstall
         id: String,
+    },
+
+    /// Run an MCP server (stdio: spawn and relay; SSE/WebSocket: print connection URL)
+    Run {
+        /// Server ID to run
+        id: String,
+
+        /// Enable verbose output (reserved for future debug mode)
+        #[arg(long)]
+        verbose: bool,
     },
 
     /// Connect to a remote server. Fetches manifest from URL if valid JSON; otherwise treats URL as raw endpoint.
@@ -103,6 +117,16 @@ enum Commands {
         /// Install to system scope (requires elevation)
         #[arg(long)]
         system: bool,
+
+        /// Skip running the setup script (if defined)
+        #[arg(long)]
+        no_setup: bool,
+    },
+
+    /// Run the setup script for an installed server (e.g. after config changes)
+    Setup {
+        /// Server ID
+        id: String,
     },
 
     /// Browse servers available in registry sources (or a specific registry URL)
@@ -357,7 +381,7 @@ fn main() {
                 }
             }
         },
-        Commands::Install { id, system } => {
+        Commands::Install { id, system, no_setup } => {
             let server = match fetch_server_from_registry(&paths, &id) {
                 Ok(s) => s,
                 Err(e) => {
@@ -373,8 +397,19 @@ fn main() {
             if scope == dmcp::discovery::Scope::System && !is_elevated() {
                 re_exec_with_pkexec();
             }
-            match install(&paths, &id, scope, Some(server)) {
+            let run_setup = !no_setup;
+            match install(&paths, &id, scope, Some(server), run_setup) {
                 Ok(()) => println!("Installed {}", id),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::Run { id, verbose } => {
+            match run(&paths, &id, verbose) {
+                Ok(()) => {}
+                Err(dmcp::run::RunError::ProcessExited(code)) => std::process::exit(code),
                 Err(e) => {
                     eprintln!("Error: {}", e);
                     std::process::exit(1);
@@ -403,6 +438,7 @@ fn main() {
             version,
             config,
             system,
+            no_setup,
         } => {
             let scope = if system {
                 dmcp::discovery::Scope::System
@@ -413,6 +449,7 @@ fn main() {
                 re_exec_with_pkexec();
             }
             let config_ref: Vec<(String, String)> = config.iter().cloned().collect();
+            let run_setup = !no_setup;
             match connect(
                 &paths,
                 &url,
@@ -422,10 +459,56 @@ fn main() {
                 version.as_deref(),
                 &config_ref,
                 scope,
+                run_setup,
             ) {
                 Ok(id) => println!("Connected {}", id),
                 Err(e) => {
                     eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::Setup { id } => {
+            match get_server(&paths, &id) {
+                Some((manifest, _)) => {
+                    let setup_script = manifest
+                        .setup_script
+                        .as_deref()
+                        .filter(|s| !s.is_empty());
+                    match setup_script {
+                        Some(script) => {
+                            let install_dir = manifest
+                                .install_dir
+                                .as_deref()
+                                .map(std::path::Path::new)
+                                .filter(|p| p.is_absolute())
+                                .map(|p| p.to_path_buf())
+                                .or_else(|| {
+                                    discovery::get_manifest_path(&paths, &id)
+                                        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                                });
+                            match install_dir {
+                                Some(dir) => {
+                                    if let Err(e) = run_setup(script, &dir, &manifest.config) {
+                                        eprintln!("Error: {}", e);
+                                        std::process::exit(1);
+                                    }
+                                    println!("Setup complete for {}", id);
+                                }
+                                None => {
+                                    eprintln!("Error: Could not determine install directory");
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                        None => {
+                            eprintln!("Server {} has no setup script defined", id);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                None => {
+                    eprintln!("Server not found: {}", id);
                     std::process::exit(1);
                 }
             }
@@ -562,6 +645,9 @@ fn print_info_output(manifest: &dmcp::Manifest, scope_str: &str) {
             println!("{}Config.{}:   {}", INDENT, k, val);
         }
     }
+    if let Some(ref s) = manifest.setup_script {
+        println!("{}Setup:      {}", INDENT, s);
+    }
 }
 
 fn print_list_table(servers: &[dmcp::ServerInfo]) {
@@ -577,7 +663,7 @@ fn print_list_table(servers: &[dmcp::ServerInfo]) {
         println!("{}Version:   {}", INDENT, s.version);
         println!("{}Transport: {}", INDENT, s.transport_type);
         println!("{}Scope:     {}", INDENT, scope);
-        println!("{}Install:   {}", INDENT, s.install_dir);
+        println!("{}Manifest: {}", INDENT, s.manifest_path);
         println!();
     }
 }

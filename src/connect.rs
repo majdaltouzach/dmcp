@@ -5,9 +5,8 @@
 
 use std::time::Duration;
 
-use crate::discovery;
-use crate::elevation::is_elevated;
 use crate::paths::Paths;
+use crate::setup;
 
 /// Connect to a remote MCP server. Tries to fetch manifest from URL; falls back to raw endpoint.
 pub fn connect(
@@ -19,6 +18,7 @@ pub fn connect(
     version: Option<&str>,
     config: &[(String, String)],
     scope: crate::discovery::Scope,
+    run_setup: bool,
 ) -> Result<String, ConnectError> {
     let url = url.trim();
     if url.is_empty() {
@@ -73,6 +73,20 @@ pub fn connect(
         let manifest_path = install_dir.join("manifest.json");
         let output = serde_json::to_string_pretty(&manifest).map_err(ConnectError::Serialize)?;
         std::fs::write(&manifest_path, output).map_err(ConnectError::WriteManifest)?;
+
+        // Run setup script if present
+        if run_setup {
+            if let Some(setup_script) = manifest.get("setupScript").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+                let config_map = manifest
+                    .get("config")
+                    .and_then(|c| c.as_object())
+                    .map(|obj| obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+                    .unwrap_or_default();
+                if let Err(e) = setup::run_setup(setup_script, &install_dir, &config_map) {
+                    return Err(ConnectError::SetupFailed(e.to_string()));
+                }
+            }
+        }
 
         crate::install::update_index_add(paths, &id, &manifest_path, scope)
             .map_err(|e| ConnectError::IndexError(e.to_string()))?;
@@ -203,6 +217,7 @@ pub enum ConnectError {
     CreateDir(std::io::Error),
     Serialize(serde_json::Error),
     WriteManifest(std::io::Error),
+    SetupFailed(String),
     ParseIndex(serde_json::Error),
     IndexError(String),
 }
@@ -214,6 +229,7 @@ impl std::fmt::Display for ConnectError {
             ConnectError::CreateDir(e) => write!(f, "Failed to create directory: {}", e),
             ConnectError::Serialize(e) => write!(f, "Failed to serialize: {}", e),
             ConnectError::WriteManifest(e) => write!(f, "Failed to write manifest: {}", e),
+            ConnectError::SetupFailed(s) => write!(f, "Setup failed: {}", s),
             ConnectError::ParseIndex(e) => write!(f, "Failed to parse index: {}", e),
             ConnectError::IndexError(s) => write!(f, "{}", s),
         }
