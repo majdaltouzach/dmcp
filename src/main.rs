@@ -3,7 +3,7 @@
 use clap::{Parser, Subcommand};
 use dmcp::config;
 use dmcp::elevation::{is_elevated, is_system_scope, re_exec_with_pkexec};
-use dmcp::{add_source, connect, discovery, fetch_server_from_registry, get_server, install, list_registry_servers, list_registry_servers_from_url, list_servers, list_sources, remove_source, run, run_setup, scope_from_registry_server, set_config_value, uninstall, Paths};
+use dmcp::{add_source, call, connect, discovery, fetch_server_from_registry, get_server, install, list_registry_servers, list_registry_servers_from_url, list_servers, list_sources, remove_source, run, run_setup, scope_from_registry_server, set_config_value, uninstall, Paths};
 
 #[derive(Parser)]
 #[command(name = "dmcp")]
@@ -128,6 +128,32 @@ enum Commands {
         /// Server ID
         id: String,
     },
+
+    /// List tools available on an MCP server
+    Tools {
+        /// Server ID
+        id: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Call a tool on an MCP server
+    Call {
+        /// Server ID
+        id: String,
+
+        /// Tool name to call
+        tool: String,
+
+        /// Tool arguments as JSON (e.g. '{"key":"value"}')
+        #[arg(long)]
+        args: Option<String>,
+    },
+
+    /// Run dmcp as an MCP server (for LLM integration)
+    Serve,
 
     /// Browse servers available in registry sources (or a specific registry URL)
     Browse {
@@ -511,6 +537,41 @@ fn main() {
                     eprintln!("Server not found: {}", id);
                     std::process::exit(1);
                 }
+            }
+        }
+        Commands::Tools { id, json } => {
+            let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+            match rt.block_on(call::list_tools(&paths, &id)) {
+                Ok(tools) => {
+                    if json {
+                        println!("{}", serde_json::to_string_pretty(&tools).unwrap());
+                    } else {
+                        for t in &tools {
+                            println!("{} - {}", t.name, t.description.as_deref().unwrap_or(""));
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::Call { id, tool, args } => {
+            let args_val = args.as_deref().and_then(|s| serde_json::from_str(s).ok());
+            let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+            match rt.block_on(call::call_tool(&paths, &id, &tool, args_val)) {
+                Ok(result) => println!("{}", call::format_call_result(&result)),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::Serve => {
+            if let Err(e) = dmcp::serve::run(&paths) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
         }
         Commands::Browse { url, user, system, json } => {

@@ -120,7 +120,7 @@ fn run_stdio(
 }
 
 /// Convert manifest config to env vars: MCP_CONFIG_<KEY> (uppercase, underscores).
-fn config_to_env(config: &std::collections::HashMap<String, serde_json::Value>) -> HashMap<String, std::ffi::OsString> {
+pub fn config_to_env(config: &std::collections::HashMap<String, serde_json::Value>) -> HashMap<String, std::ffi::OsString> {
     let mut env = HashMap::new();
     for (key, value) in config {
         let env_key = format!("MCP_CONFIG_{}", key.to_uppercase().replace('-', "_").replace('.', "_"));

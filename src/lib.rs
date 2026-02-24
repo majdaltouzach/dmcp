@@ -10,7 +10,9 @@ pub mod elevation;
 pub mod install;
 pub mod models;
 pub mod paths;
+pub mod call;
 pub mod run;
+pub mod serve;
 pub mod setup;
 pub mod sources;
 
@@ -19,6 +21,7 @@ pub use connect::connect;
 pub use config::set_config_value;
 pub use install::{fetch_server_from_registry, install, scope_from_registry_server, uninstall};
 pub use discovery::{get_manifest_path, get_server, list_servers, ServerInfo};
+pub use call::{call_tool, format_call_result, list_tools};
 pub use run::run;
 pub use setup::run_setup;
 pub use models::{Index, Manifest};

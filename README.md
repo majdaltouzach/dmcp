@@ -55,6 +55,9 @@ cargo install --path .   # Install to ~/.cargo/bin
 | `dmcp install <id> [--system] [--no-setup]` | Install from registry (runs setup script by default) |
 | `dmcp uninstall <id>` | Remove installed server |
 | `dmcp run <id> [--verbose]` | Run server (stdio: spawn; SSE/WebSocket: print URL) |
+| `dmcp tools <id> [--json]` | List tools on a server |
+| `dmcp call <id> <tool> [--args JSON]` | Call a tool on a server |
+| `dmcp serve` | Run dmcp as MCP server (for LLM integration) |
 | `dmcp setup <id>` | Run setup script for an installed server |
 | `dmcp connect <url> [--id] [--name] [--summary] [--version] [-c key=value...] [--system] [--no-setup]` | Connect to remote server |
 | `dmcp paths` | Show resolved paths (debug) |
@@ -89,6 +92,29 @@ src/
 ## Status
 
 Core features implemented: list, info, config, sources, browse, install, uninstall, connect, run, setup.
+
+## LLM Integration
+
+Run dmcp as an MCP server so LLMs (Cursor, Claude, etc.) can control it:
+
+```bash
+dmcp serve
+```
+
+Add to your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "dmcp": {
+      "command": "dmcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+See [docs/LLM-INTEGRATION.md](docs/LLM-INTEGRATION.md) for details.
 
 ## References
 

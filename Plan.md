@@ -23,6 +23,9 @@
 
 | Feature | Description | Status |
 |---------|-------------|--------|
+| **`dmcp tools <id>`** | List tools on a server | Done |
+| **`dmcp call <id> <tool>`** | Call a tool on a server | Done |
+| **`dmcp serve`** | Run dmcp as MCP server for LLMs | Done |
 | **`dmcp get-connection-info <id>`** | Output connection descriptor (JSON) for clients | Pending |
 | **`dmcp validate <id>`** | Check manifest and executable | Pending |
 | **`dmcp update <id>`** | Update local server (git pull) or refresh remote metadata | Pending |
