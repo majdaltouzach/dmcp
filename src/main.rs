@@ -59,10 +59,10 @@ enum Commands {
         action: SourcesAction,
     },
 
-    /// Install an MCP server from registry
+    /// Install an MCP server from registry (by ID) or from manifest/endpoint URL
     Install {
-        /// Server ID to install
-        id: String,
+        /// Server ID (from registry) or URL (manifest.json or SSE/WebSocket endpoint)
+        id_or_url: String,
 
         /// Install to system scope (requires elevation)
         #[arg(long)]
@@ -407,29 +407,61 @@ fn main() {
                 }
             }
         },
-        Commands::Install { id, system, no_setup } => {
-            let server = match fetch_server_from_registry(&paths, &id) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(1);
-                }
-            };
-            let scope = if system {
-                dmcp::discovery::Scope::System
-            } else {
-                scope_from_registry_server(&server)
-            };
-            if scope == dmcp::discovery::Scope::System && !is_elevated() {
-                re_exec_with_pkexec();
-            }
+        Commands::Install { id_or_url, system, no_setup } => {
             let run_setup = !no_setup;
-            match install(&paths, &id, scope, Some(server), run_setup) {
-                Ok(()) => println!("Installed {}", id),
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(1);
-                }
+            let is_url = id_or_url.starts_with("http://") || id_or_url.starts_with("https://");
+            if is_url {
+                    // URL: use connect flow
+                    let scope = if system {
+                        dmcp::discovery::Scope::System
+                    } else {
+                        dmcp::discovery::Scope::User
+                    };
+                    if scope == dmcp::discovery::Scope::System && !is_elevated() {
+                        re_exec_with_pkexec();
+                    }
+                    match connect(
+                        &paths,
+                        &id_or_url,
+                        None,
+                        None,
+                        None,
+                        None,
+                        &[],
+                        scope,
+                        run_setup,
+                    ) {
+                        Ok(id) => println!("Installed {}", id),
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+            } else {
+                    // ID: use registry install flow
+                    let id = id_or_url;
+                    let server = match fetch_server_from_registry(&paths, &id) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    };
+                    let scope = if system {
+                        dmcp::discovery::Scope::System
+                    } else {
+                        scope_from_registry_server(&server)
+                    };
+                    if scope == dmcp::discovery::Scope::System && !is_elevated() {
+                        re_exec_with_pkexec();
+                    }
+                    match install(&paths, &id, scope, Some(server), run_setup) {
+                        Ok(()) => println!("Installed {}", id),
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
             }
         }
         Commands::Run { id, verbose } => {
