@@ -84,3 +84,60 @@ fn expand_tilde(path: &str) -> PathBuf {
     let expanded = shellexpand::tilde(path);
     PathBuf::from(expanded.as_ref())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expand_tilde_replaces_home() {
+        let result = expand_tilde("~/foo/bar");
+        let s = result.to_string_lossy();
+        assert!(!s.starts_with('~'), "tilde should be expanded: {s}");
+        assert!(s.ends_with("foo/bar"), "path suffix should be preserved: {s}");
+    }
+
+    #[test]
+    fn expand_tilde_absolute_path_unchanged() {
+        let result = expand_tilde("/absolute/path");
+        assert_eq!(result, PathBuf::from("/absolute/path"));
+    }
+
+    #[test]
+    fn expand_tilde_relative_path_unchanged() {
+        let result = expand_tilde("relative/path");
+        assert_eq!(result, PathBuf::from("relative/path"));
+    }
+
+    #[test]
+    fn resolve_path_uses_env_var() {
+        std::env::set_var("DMCP_TEST_RESOLVE_CUSTOM", "/custom/path");
+        let result = resolve_path("DMCP_TEST_RESOLVE_CUSTOM", None, "/fallback");
+        std::env::remove_var("DMCP_TEST_RESOLVE_CUSTOM");
+        assert_eq!(result, PathBuf::from("/custom/path"));
+    }
+
+    #[test]
+    fn resolve_path_whitespace_env_falls_back_to_xdg() {
+        std::env::set_var("DMCP_TEST_RESOLVE_BLANK", "   ");
+        let xdg = PathBuf::from("/xdg/path");
+        let result = resolve_path("DMCP_TEST_RESOLVE_BLANK", Some(xdg.clone()), "/fallback");
+        std::env::remove_var("DMCP_TEST_RESOLVE_BLANK");
+        assert_eq!(result, xdg);
+    }
+
+    #[test]
+    fn resolve_path_uses_xdg_when_env_absent() {
+        std::env::remove_var("DMCP_TEST_RESOLVE_ABSENT");
+        let xdg = PathBuf::from("/xdg/default");
+        let result = resolve_path("DMCP_TEST_RESOLVE_ABSENT", Some(xdg.clone()), "/fallback");
+        assert_eq!(result, xdg);
+    }
+
+    #[test]
+    fn resolve_path_uses_fallback_when_no_env_and_no_xdg() {
+        std::env::remove_var("DMCP_TEST_RESOLVE_NOENV");
+        let result = resolve_path("DMCP_TEST_RESOLVE_NOENV", None, "/fallback/path");
+        assert_eq!(result, PathBuf::from("/fallback/path"));
+    }
+}

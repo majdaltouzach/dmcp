@@ -181,3 +181,111 @@ fn load_server_from_scope(base: &Path, id: &str, scope: Scope) -> Option<(Manife
     let manifest: Manifest = serde_json::from_str(&s).ok()?;
     Some((manifest, scope, manifest_path))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::Transport;
+
+    #[test]
+    fn transport_type_name_stdio() {
+        let t = Transport::Stdio { command: "node".to_string(), args: None, description: None };
+        assert_eq!(transport_type_name(&t), "stdio");
+    }
+
+    #[test]
+    fn transport_type_name_sse() {
+        let t = Transport::Sse { url: "http://localhost".to_string(), description: None };
+        assert_eq!(transport_type_name(&t), "sse");
+    }
+
+    #[test]
+    fn transport_type_name_websocket() {
+        let t = Transport::WebSocket { ws_url: "ws://localhost".to_string(), description: None };
+        assert_eq!(transport_type_name(&t), "websocket");
+    }
+
+    #[test]
+    fn list_servers_empty_when_no_files() {
+        // Pointing at a nonexistent dir should return an empty vec, not panic
+        let paths = Paths {
+            user_sources: std::path::PathBuf::from("/nonexistent/sources.list"),
+            user_install_dir: std::path::PathBuf::from("/nonexistent/user"),
+            system_sources: std::path::PathBuf::from("/nonexistent/system/sources.list"),
+            system_install_dir: std::path::PathBuf::from("/nonexistent/system"),
+        };
+        let servers = list_servers(&paths, true, true, false);
+        assert!(servers.is_empty());
+    }
+
+    #[test]
+    fn list_servers_loads_from_tempdir() {
+        let dir = std::env::temp_dir().join("dmcp_test_list_servers");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Write index.json
+        let manifest_path = dir.join("foo/manifest.json");
+        std::fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
+        let index = serde_json::json!({
+            "servers": { "foo": { "location": manifest_path.to_str().unwrap() } }
+        });
+        std::fs::write(dir.join("index.json"), index.to_string()).unwrap();
+
+        // Write manifest.json
+        let manifest = serde_json::json!({
+            "id": "foo", "name": "Foo Server", "version": "1.0",
+            "transports": [{ "type": "stdio", "command": "foo-bin" }]
+        });
+        std::fs::write(&manifest_path, manifest.to_string()).unwrap();
+
+        let paths = Paths {
+            user_sources: dir.join("sources.list"),
+            user_install_dir: dir.clone(),
+            system_sources: std::path::PathBuf::from("/nonexistent/system/sources.list"),
+            system_install_dir: std::path::PathBuf::from("/nonexistent/system"),
+        };
+        let servers = list_servers(&paths, true, false, false);
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].id, "foo");
+        assert_eq!(servers[0].name, "Foo Server");
+        assert_eq!(servers[0].transport_type, "stdio");
+        assert_eq!(servers[0].scope, Scope::User);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn user_scope_takes_precedence_over_system() {
+        let user_dir = std::env::temp_dir().join("dmcp_test_precedence_user");
+        let sys_dir = std::env::temp_dir().join("dmcp_test_precedence_sys");
+        for dir in [&user_dir, &sys_dir] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+
+        for (dir, server_name) in [(&user_dir, "User Foo"), (&sys_dir, "System Foo")] {
+            let manifest_path = dir.join("foo/manifest.json");
+            std::fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
+            let index = serde_json::json!({
+                "servers": { "foo": { "location": manifest_path.to_str().unwrap() } }
+            });
+            std::fs::write(dir.join("index.json"), index.to_string()).unwrap();
+            let manifest = serde_json::json!({
+                "id": "foo", "name": server_name, "version": "1.0"
+            });
+            std::fs::write(&manifest_path, manifest.to_string()).unwrap();
+        }
+
+        let paths = Paths {
+            user_sources: user_dir.join("sources.list"),
+            user_install_dir: user_dir.clone(),
+            system_sources: sys_dir.join("sources.list"),
+            system_install_dir: sys_dir.clone(),
+        };
+        let servers = list_servers(&paths, true, true, false);
+        assert_eq!(servers.len(), 1, "duplicate IDs should be deduplicated");
+        assert_eq!(servers[0].name, "User Foo", "user scope should win");
+
+        std::fs::remove_dir_all(&user_dir).ok();
+        std::fs::remove_dir_all(&sys_dir).ok();
+    }
+}
