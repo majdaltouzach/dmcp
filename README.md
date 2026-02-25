@@ -15,7 +15,7 @@ It supports both **local** (stdio) and **remote** (SSE, WebSocket) servers. Loca
 
 - **Discovery** — List installed servers (user + system)
 - **Registry** — Browse servers from configurable registry URLs
-- **Install** — Install from registry (Git clone for stdio, metadata for remote)
+- **Install** — Install from registry (by ID) or from URL (manifest/endpoint)
 - **Connect** — Add remote servers by URL (fetches manifest if valid JSON, else treats as raw endpoint)
 - **Config** — Get and set per-server configuration (API keys, endpoints, etc.)
 - **Invocation** — Spawn stdio servers; SSE/WebSocket: print connection URL
@@ -52,7 +52,7 @@ cargo install --path .   # Install to ~/.cargo/bin
 | `dmcp sources add <url> [--system]` | Add a registry source (default: user) |
 | `dmcp sources remove <url> [--system]` | Remove a registry source |
 | `dmcp browse [url] [--user] [--system] [--json]` | Browse servers in registries (or from specific URL) |
-| `dmcp install <id> [--system] [--no-setup]` | Install from registry (runs setup script by default) |
+| `dmcp install <id or url> [--system] [--no-setup]` | Install from registry (by ID) or from manifest/endpoint URL |
 | `dmcp uninstall <id>` | Remove installed server |
 | `dmcp run <id> [--verbose]` | Run server (stdio: spawn; SSE/WebSocket: print URL) |
 | `dmcp tools <id> [--json]` | List tools on a server |
