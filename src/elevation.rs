@@ -40,8 +40,15 @@ pub fn re_exec_with_pkexec() -> ! {
     match status {
         Ok(s) => process::exit(s.code().unwrap_or(1)),
         Err(e) => {
-            eprintln!("Error: pkexec failed: {}", e);
-            eprintln!("Make sure polkit is installed. You can also try: sudo dmcp ...");
+            if e.kind() == std::io::ErrorKind::NotFound {
+                eprintln!("Error: pkexec not found. Install polkit for system-scope operations:");
+                eprintln!("  pacman -S polkit   (Arch Linux)");
+                eprintln!("  apt install policykit-1  (Debian/Ubuntu)");
+                eprintln!("Alternatively, run with sudo: sudo dmcp ...");
+            } else {
+                eprintln!("Error: pkexec failed: {}", e);
+                eprintln!("Make sure polkit is installed. You can also try: sudo dmcp ...");
+            }
             process::exit(1);
         }
     }
