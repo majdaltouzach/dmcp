@@ -9,21 +9,22 @@ arch=('x86_64' 'armv6h' 'armv7h' 'aarch64')
 makedepends=('cargo')
 depends=('gcc-libs')
 optdepends=('polkit: for system-scope operations (pkexec)')
-source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 build() {
   cd "$pkgname-$pkgver"
-  cargo build --release --locked
+  cargo build --release 
 }
 
 check() {
   cd "$pkgname-$pkgver"
-  cargo test --release --locked
+  cargo test --release 
 }
 
 package() {
+  # set -x
   cd "$pkgname-$pkgver"
   install -Dm755 target/release/dmcp "$pkgdir/usr/bin/dmcp"
-  [[ -f man/dmcp.1 ]] && install -Dm644 man/dmcp.1 "$pkgdir/usr/share/man/man1/dmcp.1"
+  [[ -f man/dmcp.1 ]] && install -Dm644 man/dmcp.1 "$pkgdir/usr/share/man/man1/dmcp.1" || true
 }
