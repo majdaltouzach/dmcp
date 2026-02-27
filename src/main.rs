@@ -623,7 +623,7 @@ fn main() {
             }
         }
         Commands::Browse { url, user, system, json } => {
-            let (servers, errors): (Vec<_>, Vec<_>) = if let Some(ref u) = url {
+            let (mut servers, errors): (Vec<_>, Vec<_>) = if let Some(ref u) = url {
                 match list_registry_servers_from_url(u) {
                     Ok(s) => (s, vec![]),
                     Err(e) => {
@@ -636,6 +636,30 @@ fn main() {
                 let include_system = system || (!user && !system);
                 list_registry_servers(&paths, include_user, include_system)
             };
+
+            let (include_user, include_system) = if url.is_some() {
+                (true, true)
+            } else {
+                (
+                    user || (!user && !system),
+                    system || (!user && !system),
+                )
+            };
+            let installed_ids: std::collections::HashSet<String> = list_servers(&paths, include_user, include_system, false)
+                .into_iter()
+                .map(|s| s.id)
+                .collect();
+
+            for s in &mut servers {
+                s.installed = installed_ids.contains(&s.id);
+            }
+            servers.sort_by(|a, b| {
+                match (a.installed, b.installed) {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    _ => a.id.cmp(&b.id),
+                }
+            });
 
             for e in &errors {
                 eprintln!("Warning: {}", e);
@@ -781,10 +805,12 @@ fn print_browse_table(servers: &[dmcp::RegistryServer]) {
     const INDENT: &str = "        ";
 
     for s in servers {
+        let status = if s.installed { "INSTALLED" } else { "NOT INSTALLED" };
         println!("{}", s.id);
         println!("{}Name:      {}", INDENT, s.name);
         println!("{}Version:   {}", INDENT, s.version);
         println!("{}Transport: {}", INDENT, s.transport);
+        println!("{}Status:    {}", INDENT, status);
         if !s.summary.is_empty() {
             println!("{}Summary:   {}", INDENT, s.summary.lines().next().unwrap_or("").trim());
         }
