@@ -4,6 +4,7 @@
 
 pub mod browse;
 pub mod config;
+pub mod transport;
 pub mod connect;
 pub mod discovery;
 pub mod elevation;

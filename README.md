@@ -51,7 +51,7 @@ cargo install --path .   # Install to ~/.cargo/bin
 | `dmcp sources list [--user] [--system]` | List registry source URLs |
 | `dmcp sources add <url> [--system]` | Add a registry source (default: user) |
 | `dmcp sources remove <url> [--system]` | Remove a registry source |
-| `dmcp browse [url] [--user] [--system] [-k keyword...] [--json]` | Browse servers in registries (filter by keyword) |
+| `dmcp browse [url] [--user] [--system] [-k keyword...] [--json]` | Browse servers in registries (filter by keyword; transport fetched from manifest when registry omits it) |
 | `dmcp install <id or url> [--system] [--no-setup]` | Install from registry (by ID) or from manifest/endpoint URL |
 | `dmcp uninstall <id>` | Remove installed server |
 | `dmcp run <id> [--verbose]` | Run server (stdio: spawn; SSE/WebSocket: print URL) |
@@ -77,6 +77,7 @@ src/
 ├── setup.rs     # Setup script execution
 
 ├── browse.rs    # Browse registry servers
+├── transport.rs # Transport extraction from manifests (MVP; fetches when registry omits)
 ├── connect.rs   # Connect to remote by URL (manifest or raw)
 ├── elevation.rs # pkexec for system scope
 └── models.rs    # Index, Manifest, Transport structs

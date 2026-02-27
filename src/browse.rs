@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::paths::Paths;
 use crate::sources::list_sources;
+use crate::transport;
 
 fn build_http_client() -> Result<reqwest::blocking::Client, reqwest::Error> {
     reqwest::blocking::Client::builder()
@@ -152,13 +153,21 @@ fn fetch_registry(
             .unwrap_or("?")
             .to_string();
 
-        let transport = server
+        let mut transport = server
             .get("transports")
             .and_then(|t| t.as_array())
             .and_then(|a| a.first())
             .and_then(|t| t.get("type").and_then(|x| x.as_str()))
-            .unwrap_or("?")
-            .to_string();
+            .map(String::from)
+            .unwrap_or_else(|| "?".to_string());
+
+        if transport == "?" {
+            if let Some(manifest_url) = server.get("manifest").and_then(|m| m.as_str()) {
+                if let Some(t) = transport::transport_from_manifest_url(client, manifest_url) {
+                    transport = t;
+                }
+            }
+        }
 
         let keywords: Vec<String> = server
             .get("keywords")
