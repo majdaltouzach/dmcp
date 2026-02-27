@@ -1,7 +1,9 @@
 //! Path resolution for user and system scope.
 //!
-//! Uses env vars when set, otherwise XDG defaults.
+//! Uses env vars when set (from .env if present), otherwise values from
+//! .env.example, then XDG/hardcoded defaults.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Resolved paths for MCP directories.
@@ -14,27 +16,32 @@ pub struct Paths {
 }
 
 impl Paths {
-    /// Resolve paths from environment, falling back to XDG/defaults.
+    /// Resolve paths from environment, falling back to .env.example, then XDG/defaults.
     pub fn resolve() -> Self {
+        let env_defaults = load_env_example_defaults();
         let user_sources = resolve_path(
             "MCP_USER_SOURCES_PATH",
             dirs::config_dir().map(|p| p.join("mcp/sources.list")),
             "~/.config/mcp/sources.list",
+            &env_defaults,
         );
         let user_install_dir = resolve_path(
             "MCP_USER_INSTALL_DIR",
             dirs::data_local_dir().map(|p| p.join("mcp/installed")),
             "~/.local/share/mcp/installed/",
+            &env_defaults,
         );
         let system_sources = resolve_path(
             "MCP_SYSTEM_SOURCES_PATH",
             Some(PathBuf::from("/etc/mcp/sources.list")),
             "/etc/mcp/sources.list",
+            &env_defaults,
         );
         let system_install_dir = resolve_path(
             "MCP_SYSTEM_INSTALL_DIR",
             Some(PathBuf::from("/usr/share/mcp/installed/")),
             "/usr/share/mcp/installed/",
+            &env_defaults,
         );
 
         Self {
@@ -70,6 +77,7 @@ fn resolve_path(
     env_var: &str,
     xdg_default: Option<PathBuf>,
     fallback: &str,
+    env_defaults: &HashMap<String, String>,
 ) -> PathBuf {
     if let Ok(val) = std::env::var(env_var) {
         let trimmed = val.trim();
@@ -77,7 +85,51 @@ fn resolve_path(
             return expand_tilde(trimmed);
         }
     }
+    if let Some(val) = env_defaults.get(env_var) {
+        let trimmed = val.trim();
+        if !trimmed.is_empty() {
+            return expand_tilde(trimmed);
+        }
+    }
     xdg_default.unwrap_or_else(|| expand_tilde(fallback))
+}
+
+/// Load default values from .env.example. Searches: cwd, XDG_CONFIG_HOME/mcp, /etc/dmcp.
+fn load_env_example_defaults() -> HashMap<String, String> {
+    let candidates = [
+        std::env::current_dir().ok().map(|p| p.join(".env.example")),
+        dirs::config_dir().map(|p| p.join("mcp/.env.example")),
+        Some(PathBuf::from("/etc/dmcp/env.example")),
+    ];
+    for opt in &candidates {
+        if let Some(ref path) = opt {
+            if path.exists() {
+                if let Ok(map) = parse_env_file(path) {
+                    return map;
+                }
+            }
+        }
+    }
+    HashMap::new()
+}
+
+fn parse_env_file(path: &Path) -> std::io::Result<HashMap<String, String>> {
+    let content = std::fs::read_to_string(path)?;
+    let mut map = HashMap::new();
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some(eq) = line.find('=') {
+            let key = line[..eq].trim();
+            let val = line[eq + 1..].trim();
+            if !key.is_empty() {
+                map.insert(key.to_string(), val.to_string());
+            }
+        }
+    }
+    Ok(map)
 }
 
 fn expand_tilde(path: &str) -> PathBuf {

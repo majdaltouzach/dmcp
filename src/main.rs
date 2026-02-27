@@ -242,6 +242,7 @@ enum SourcesAction {
 }
 
 fn main() {
+    dotenvy::dotenv().ok();
     let cli = Cli::parse();
     let paths = Paths::resolve();
     let debug = cli.debug;
