@@ -3,7 +3,7 @@
 use clap::{Parser, Subcommand};
 use dmcp::config;
 use dmcp::elevation::{is_elevated, is_system_scope, re_exec_with_pkexec};
-use dmcp::{add_source, call, connect, discovery, fetch_server_from_registry, get_server, install, list_registry_servers, list_registry_servers_from_url, list_servers, list_sources, remove_source, run, run_setup, scope_from_registry_server, set_config_value, uninstall, Paths};
+use dmcp::{add_source, call, connect, discovery, fetch_server_from_registry, filter_servers_by_keywords, get_server, install, list_registry_servers, list_registry_servers_from_url, list_servers, list_sources, remove_source, run, run_setup, scope_from_registry_server, set_config_value, uninstall, Paths};
 
 #[derive(Parser)]
 #[command(name = "dmcp")]
@@ -167,6 +167,10 @@ enum Commands {
         /// Show system-scope sources only (ignored when URL is given)
         #[arg(long)]
         system: bool,
+
+        /// Filter by keyword (repeatable). Matches id, name, summary, and keywords.
+        #[arg(short = 'k', long = "keyword")]
+        keyword: Vec<String>,
 
         /// Output as JSON
         #[arg(long)]
@@ -622,7 +626,7 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Browse { url, user, system, json } => {
+        Commands::Browse { url, user, system, keyword, json } => {
             let (mut servers, errors): (Vec<_>, Vec<_>) = if let Some(ref u) = url {
                 match list_registry_servers_from_url(u) {
                     Ok(s) => (s, vec![]),
@@ -653,6 +657,7 @@ fn main() {
             for s in &mut servers {
                 s.installed = installed_ids.contains(&s.id);
             }
+            servers = filter_servers_by_keywords(servers, &keyword);
             servers.sort_by(|a, b| {
                 match (a.installed, b.installed) {
                     (true, false) => std::cmp::Ordering::Less,

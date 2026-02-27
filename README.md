@@ -51,7 +51,7 @@ cargo install --path .   # Install to ~/.cargo/bin
 | `dmcp sources list [--user] [--system]` | List registry source URLs |
 | `dmcp sources add <url> [--system]` | Add a registry source (default: user) |
 | `dmcp sources remove <url> [--system]` | Remove a registry source |
-| `dmcp browse [url] [--user] [--system] [--json]` | Browse servers in registries (or from specific URL) |
+| `dmcp browse [url] [--user] [--system] [-k keyword...] [--json]` | Browse servers in registries (filter by keyword) |
 | `dmcp install <id or url> [--system] [--no-setup]` | Install from registry (by ID) or from manifest/endpoint URL |
 | `dmcp uninstall <id>` | Remove installed server |
 | `dmcp run <id> [--verbose]` | Run server (stdio: spawn; SSE/WebSocket: print URL) |

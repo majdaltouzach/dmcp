@@ -17,7 +17,7 @@ pub mod serve;
 pub mod setup;
 pub mod sources;
 
-pub use browse::{list_registry_servers, list_registry_servers_from_url, RegistryServer};
+pub use browse::{filter_servers_by_keywords, list_registry_servers, list_registry_servers_from_url, RegistryServer};
 pub use connect::connect;
 pub use config::set_config_value;
 pub use install::{fetch_server_from_registry, install, scope_from_registry_server, uninstall};

@@ -25,6 +25,9 @@ pub struct RegistryServer {
     pub source: String,
     /// Whether this server is installed (user or system scope).
     pub installed: bool,
+    /// Search keywords for discovery.
+    #[serde(default)]
+    pub keywords: Vec<String>,
 }
 
 /// Fetch and list servers from a specific registry URL.
@@ -70,6 +73,41 @@ pub fn list_registry_servers(
     }
 
     (servers, errors)
+}
+
+/// Filter servers by keywords. A server matches if any keyword (case-insensitive) appears in
+/// id, name, summary, or the server's keywords.
+pub fn filter_servers_by_keywords(
+    servers: Vec<RegistryServer>,
+    keywords: &[String],
+) -> Vec<RegistryServer> {
+    if keywords.is_empty() {
+        return servers;
+    }
+    let keywords_lower: Vec<String> = keywords
+        .iter()
+        .map(|k| k.to_lowercase())
+        .filter(|k| !k.is_empty())
+        .collect();
+    if keywords_lower.is_empty() {
+        return servers;
+    }
+    servers
+        .into_iter()
+        .filter(|s| {
+            let searchable = [
+                s.id.as_str(),
+                s.name.as_str(),
+                s.summary.as_str(),
+                &s.keywords.join(" "),
+            ]
+            .join(" ")
+            .to_lowercase();
+            keywords_lower
+                .iter()
+                .any(|kw| searchable.contains(kw))
+        })
+        .collect()
 }
 
 fn fetch_registry(
@@ -122,6 +160,16 @@ fn fetch_registry(
             .unwrap_or("?")
             .to_string();
 
+        let keywords: Vec<String> = server
+            .get("keywords")
+            .and_then(|k| k.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
         result.push(RegistryServer {
             id,
             name,
@@ -130,6 +178,7 @@ fn fetch_registry(
             transport,
             source: url.to_string(),
             installed: false,
+            keywords,
         });
     }
 
