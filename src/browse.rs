@@ -15,7 +15,7 @@ fn build_http_client() -> Result<reqwest::blocking::Client, reqwest::Error> {
 }
 
 /// A server entry from a registry (for display).
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct RegistryServer {
     pub id: String,
     pub name: String,
@@ -23,6 +23,8 @@ pub struct RegistryServer {
     pub version: String,
     pub transport: String,
     pub source: String,
+    /// Whether this server is installed (user or system scope).
+    pub installed: bool,
 }
 
 /// Fetch and list servers from a specific registry URL.
@@ -127,6 +129,7 @@ fn fetch_registry(
             version,
             transport,
             source: url.to_string(),
+            installed: false,
         });
     }
 
